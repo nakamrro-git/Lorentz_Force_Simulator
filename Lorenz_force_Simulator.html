@@ -1,0 +1,761 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>荷電粒子の磁場中運動シミュレーター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: controls column on the left; right column holds a readout strip, three motion views (3D large, xy and xz stacked), then a separate graph window. Single column on phones. */
+:root {
+  --bg: #e8edef;
+  --panel: #f6f8f9;
+  --canvas: #fcfdfd;
+  --ink: #11222b;
+  --muted: #576b74;
+  --line: #c6d1d6;
+  --grid: #dde5e8;
+  --accent: #0e6f78;
+  --accent-ink: #ffffff;
+  --pos: #d4442a;
+  --neg: #2563c9;
+  --ax-x: #c8352f;
+  --ax-y: #2b8a49;
+  --ax-z: #2a5fc4;
+  --bfield: #8a3fb5;
+  --force: #bf7508;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1518;
+    --panel: #142026;
+    --canvas: #0a1114;
+    --ink: #e4edf0;
+    --muted: #8ba0aa;
+    --line: #2a3a42;
+    --grid: #1a272d;
+    --accent: #4fc3cc;
+    --accent-ink: #062226;
+    --pos: #ff7a5c;
+    --neg: #6aa2ff;
+    --ax-x: #ff6b63;
+    --ax-y: #5fd08a;
+    --ax-z: #6ea3ff;
+    --bfield: #c58bf0;
+    --force: #f0b44c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1518;
+  --panel: #142026;
+  --canvas: #0a1114;
+  --ink: #e4edf0;
+  --muted: #8ba0aa;
+  --line: #2a3a42;
+  --grid: #1a272d;
+  --accent: #4fc3cc;
+  --accent-ink: #062226;
+  --pos: #ff7a5c;
+  --neg: #6aa2ff;
+  --ax-x: #ff6b63;
+  --ax-y: #5fd08a;
+  --ax-z: #6ea3ff;
+  --bfield: #c58bf0;
+  --force: #f0b44c;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 1360px; margin: 0 auto; display: grid; gap: 18px; }
+header h1 { margin: 0; font-size: clamp(20px, 3.2vw, 28px); font-weight: 700; letter-spacing: 0.02em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.layout { display: grid; grid-template-columns: minmax(280px, 330px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 920px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 18px; min-width: 0; }
+.controls h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.row { display: grid; gap: 8px; }
+.row.two { grid-template-columns: auto minmax(0, 1fr); align-items: end; }
+.row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.f { display: grid; gap: 3px; min-width: 0; }
+.f > span { font-size: 12px; color: var(--muted); }
+.f > span b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+input[type="number"] {
+  width: 100%; min-width: 0; font: 500 14px var(--font-mono); color: var(--ink);
+  background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+}
+input[type="number"]:disabled { opacity: 0.5; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--canvas); }
+.seg button { font: 700 16px var(--font-mono); width: 38px; height: 32px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"].plus { background: var(--pos); color: #fff; }
+.seg button[aria-pressed="true"].minus { background: var(--neg); color: #fff; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip, .btn {
+  font: 500 13px var(--font-body); color: var(--ink); background: var(--canvas);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+.chip:hover, .btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; min-width: 84px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.note[hidden] { display: none; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+input[type="checkbox"], input[type="range"] { accent-color: var(--accent); }
+.speed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-top: 12px; font-size: 13px; }
+.speed output { font-family: var(--font-mono); min-width: 3.6em; text-align: right; }
+.eq { font-family: var(--font-mono); font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; margin: 0; line-height: 1.7; }
+
+main { display: grid; gap: 14px; min-width: 0; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.readout div { background: var(--panel); padding: 8px 12px; min-width: 0; }
+.readout .wide { grid-column: span 2; }
+@media (max-width: 480px) { .readout .wide { grid-column: span 1; } }
+.readout dt { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+.readout dd { margin: 0; font: 500 14px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend i.ring { width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 2px solid var(--ink); }
+
+.views { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 560px) { .views { grid-template-columns: minmax(0, 1fr); } }
+.card { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; align-items: baseline; font-weight: 700; font-size: 13px; padding: 0 2px; }
+.card figcaption small { font-weight: 400; color: var(--muted); font-size: 11px; }
+.v3d { grid-row: span 2; }
+@media (max-width: 560px) { .v3d { grid-row: auto; } }
+.stage { position: relative; flex: 1; min-height: 320px; border-radius: 6px; overflow: hidden; }
+@media (max-width: 560px) { .stage { aspect-ratio: 1; min-height: 0; } }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+canvas.sq { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; max-width: 100%; }
+
+.win { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 6px 24px rgba(8, 24, 30, 0.12); }
+.win .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.win .bar b { font-size: 13px; }
+.win .bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.win .bar input[type="number"] { width: 72px; padding: 3px 6px; font-size: 12px; }
+.win .plots { display: grid; gap: 1px; background: var(--line); }
+.win canvas { display: block; width: 100%; height: 132px; background: var(--canvas); }
+.win canvas:last-child { height: 156px; }
+</style>
+
+<div class="page">
+  <header>
+    <h1>荷電粒子の磁場中運動シミュレーター</h1>
+    <p>一様な磁場の中を運動する荷電粒子を、3次元表示、xy平面、xz平面で動かします。位置の時間変化は別ウィンドウのグラフで確認できます。</p>
+  </header>
+
+  <div class="layout">
+    <aside class="controls" aria-label="パラメータ">
+      <section>
+        <h2>プリセット</h2>
+        <div class="chips">
+          <button class="chip" type="button" data-preset="helix">らせん運動</button>
+          <button class="chip" type="button" data-preset="circle">円運動</button>
+          <button class="chip" type="button" data-preset="line">直線運動</button>
+          <button class="chip" type="button" data-preset="tilt">斜めの磁場</button>
+          <button class="chip" type="button" data-preset="neg">負電荷</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>粒子</h2>
+        <div class="row">
+          <div class="row two">
+            <div class="f"><span>電荷の符号</span>
+              <div class="seg" role="group" aria-label="電荷の符号">
+                <button type="button" class="plus" data-target="q" data-sign="1" aria-pressed="true" aria-label="正電荷">+</button>
+                <button type="button" class="minus" data-target="q" data-sign="-1" aria-pressed="false" aria-label="負電荷">&minus;</button>
+              </div>
+            </div>
+            <label class="f"><span>電荷の大きさ |q| [C]</span><input id="qmag" type="number" value="1" min="0.01" step="0.1"></label>
+          </div>
+          <div class="row two">
+            <div class="f"><span>質量の符号</span>
+              <div class="seg" role="group" aria-label="質量の符号">
+                <button type="button" class="plus" data-target="m" data-sign="1" aria-pressed="true" aria-label="正の質量">+</button>
+                <button type="button" class="minus" data-target="m" data-sign="-1" aria-pressed="false" aria-label="負の質量">&minus;</button>
+              </div>
+            </div>
+            <label class="f"><span>質量の大きさ |m| [kg]</span><input id="mmag" type="number" value="1" min="0.01" step="0.1"></label>
+          </div>
+        </div>
+        <p class="note" id="massNote" hidden>負の質量では加速度の向きが反転します(仮想的な設定です)。粒子は中空の円で表示します。</p>
+      </section>
+
+      <section>
+        <h2>磁場 B [T]</h2>
+        <div class="row three">
+          <label class="f"><span>Bx</span><input id="bx" type="number" value="0" step="0.1"></label>
+          <label class="f"><span>By</span><input id="by" type="number" value="0" step="0.1"></label>
+          <label class="f"><span>Bz</span><input id="bz" type="number" value="1" step="0.1"></label>
+        </div>
+        <div class="chips" style="margin-top:8px">
+          <button class="chip" type="button" data-bdir="1,0,0">+x</button>
+          <button class="chip" type="button" data-bdir="0,1,0">+y</button>
+          <button class="chip" type="button" data-bdir="0,0,1">+z</button>
+          <button class="chip" type="button" data-bdir="1,0,1">x+z</button>
+          <button class="chip" type="button" data-bdir="1,1,1">x+y+z</button>
+        </div>
+        <p class="note" id="bInfo"></p>
+      </section>
+
+      <section>
+        <h2>初速度 v&#8320; [m/s]</h2>
+        <div class="row three">
+          <label class="f"><span>vx</span><input id="vx" type="number" value="2" step="0.1"></label>
+          <label class="f"><span>vy</span><input id="vy" type="number" value="0" step="0.1"></label>
+          <label class="f"><span>vz</span><input id="vz" type="number" value="1" step="0.1"></label>
+        </div>
+        <p class="note">初期位置は原点です。値を変えると t = 0 から再開します。</p>
+      </section>
+
+      <section>
+        <h2>再生</h2>
+        <div class="btns">
+          <button class="btn primary" id="play" type="button">一時停止</button>
+          <button class="btn" id="reset" type="button">リセット</button>
+        </div>
+        <div class="speed">
+          <label for="speed">速さ</label>
+          <input id="speed" type="range" min="0.1" max="4" step="0.1" value="1">
+          <output id="speedOut" for="speed">1.0×</output>
+        </div>
+        <div class="checks">
+          <label><input id="optTrail" type="checkbox" checked>軌跡</label>
+          <label><input id="optVec" type="checkbox" checked>ベクトル</label>
+          <label><input id="optAuto" type="checkbox" checked>表示範囲を自動調整</label>
+        </div>
+        <div class="row two" style="margin-top:10px">
+          <span style="font-size:12px;color:var(--muted);align-self:center">範囲 ±[m]</span>
+          <input id="range" type="number" value="5" min="0.1" step="0.5" disabled aria-label="表示範囲">
+        </div>
+      </section>
+
+      <p class="eq">m dv/dt = q (v &times; B)<br>角振動数 &omega; = |q|B / |m|<br>回転半径 r = m v&#8869; / (|q| B)</p>
+    </aside>
+
+    <main>
+      <dl class="readout" aria-label="現在の状態">
+        <div><dt>時刻 t</dt><dd id="roT">0.00 s</dd></div>
+        <div class="wide"><dt>位置 (x, y, z) [m]</dt><dd id="roPos">-</dd></div>
+        <div class="wide"><dt>速度 (vx, vy, vz) [m/s]</dt><dd id="roVel">-</dd></div>
+        <div><dt>速さ |v|</dt><dd id="roSpeed">-</dd></div>
+        <div><dt>角振動数 &omega;</dt><dd id="roW">-</dd></div>
+        <div><dt>周期 T</dt><dd id="roPeriod">-</dd></div>
+        <div><dt>回転半径 r</dt><dd id="roR">-</dd></div>
+        <div><dt>ピッチ</dt><dd id="roPitch">-</dd></div>
+      </dl>
+
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--bfield)"></i>磁場 B</span>
+        <span><i style="background:var(--ink)"></i>速度 v</span>
+        <span><i style="background:var(--force)"></i>ローレンツ力 F</span>
+        <span><i class="dot" style="background:var(--pos)"></i>正電荷</span>
+        <span><i class="dot" style="background:var(--neg)"></i>負電荷</span>
+        <span><i class="ring"></i>負の質量</span>
+      </div>
+
+      <div class="views">
+        <figure class="card v3d">
+          <figcaption>3次元 <small>ドラッグで回転、ダブルクリックで視点を戻す</small></figcaption>
+          <div class="stage"><canvas id="c3d" role="img" aria-label="粒子の3次元の軌跡"></canvas></div>
+        </figure>
+        <figure class="card">
+          <figcaption>xy平面 <small>z軸の正の側から見る</small></figcaption>
+          <canvas id="cxy" class="sq" role="img" aria-label="xy平面上の粒子の軌跡"></canvas>
+        </figure>
+        <figure class="card">
+          <figcaption>xz平面 <small>y軸の負の側から見る</small></figcaption>
+          <canvas id="cxz" class="sq" role="img" aria-label="xz平面上の粒子の軌跡"></canvas>
+        </figure>
+      </div>
+
+      <section class="win" aria-label="グラフウィンドウ">
+        <div class="bar">
+          <b>グラフウィンドウ &nbsp;x-t / y-t / z-t</b>
+          <label>表示する時間 [s]<input id="win" type="number" value="20" min="1" step="1"></label>
+        </div>
+        <div class="plots">
+          <canvas id="gx" role="img" aria-label="x座標の時間変化"></canvas>
+          <canvas id="gy" role="img" aria-label="y座標の時間変化"></canvas>
+          <canvas id="gz" role="img" aria-label="z座標の時間変化"></canvas>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { qs: 1, ms: 1, t: 0, playing: true, speed: 1, showTrail: true, showVec: true, auto: true, az: -0.62, el: 0.42 };
+  var P = null, T = null;
+  var MONO = '11px "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace';
+  var LABEL = '700 13px "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif';
+
+  /* ---------- vector helpers ---------- */
+  function vsc(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+  function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function vlen(a) { return Math.hypot(a[0], a[1], a[2]); }
+  function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+  function unit(a) { var l = vlen(a); return l < 1e-12 ? null : vsc(a, 1 / l); }
+  function fmt(x, d) {
+    if (d === undefined) d = 2;
+    if (!isFinite(x)) return x > 0 ? '∞' : '-';
+    var s = x.toFixed(d);
+    if (s.charAt(0) === '-' && parseFloat(s) === 0) s = s.slice(1);
+    return s;
+  }
+  function niceStep(range, target) {
+    var raw = range / target;
+    if (!(raw > 0)) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(raw)));
+    var f = raw / p;
+    return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+  }
+
+  /* ---------- physics: exact solution for uniform B ---------- */
+  function readParams() {
+    function num(id, def) { var v = parseFloat($(id).value); return isFinite(v) ? v : def; }
+    var qm = Math.max(1e-3, Math.abs(num('qmag', 1)));
+    var mm = Math.max(1e-3, Math.abs(num('mmag', 1)));
+    P = { q: S.qs * qm, m: S.ms * mm, B: [num('bx', 0), num('by', 0), num('bz', 0)], v: [num('vx', 0), num('vy', 0), num('vz', 0)] };
+    build();
+  }
+  function build() {
+    var k = P.q / P.m;
+    var Om = vsc(P.B, -k);          /* dv/dt = Om x v */
+    var w = vlen(Om);
+    T = { w: w };
+    if (w < 1e-9) {
+      T.w = 0; T.period = Infinity; T.vpar = vlen(P.v); T.vperp = 0;
+      T.pos = function (t) { return vsc(P.v, t); };
+      T.vel = function () { return P.v.slice(); };
+      return;
+    }
+    var n = vsc(Om, 1 / w);
+    var vp = vdot(P.v, n);
+    var vpar = vsc(n, vp);
+    var vperp = [P.v[0] - vpar[0], P.v[1] - vpar[1], P.v[2] - vpar[2]];
+    var c = vcross(n, vperp);
+    T.period = 2 * Math.PI / w;
+    T.vpar = Math.abs(vp);
+    T.vperp = vlen(vperp);
+    T.pos = function (t) {
+      var s = Math.sin(w * t) / w, o = (1 - Math.cos(w * t)) / w;
+      return [vpar[0] * t + vperp[0] * s + c[0] * o, vpar[1] * t + vperp[1] * s + c[1] * o, vpar[2] * t + vperp[2] * s + c[2] * o];
+    };
+    T.vel = function (t) {
+      var cs = Math.cos(w * t), sn = Math.sin(w * t);
+      return [vpar[0] + vperp[0] * cs + c[0] * sn, vpar[1] + vperp[1] * cs + c[1] * sn, vpar[2] + vperp[2] * cs + c[2] * sn];
+    };
+  }
+
+  /* ---------- canvas helpers ---------- */
+  function setup(cv) {
+    var r = cv.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: r.width, h: r.height };
+  }
+  function colors() {
+    var cs = getComputedStyle(document.documentElement);
+    function g(n) { return cs.getPropertyValue(n).trim(); }
+    return { canvas: g('--canvas'), ink: g('--ink'), muted: g('--muted'), line: g('--line'), grid: g('--grid'), pos: g('--pos'), neg: g('--neg'),
+      ax: [g('--ax-x'), g('--ax-y'), g('--ax-z')], b: g('--bfield'), f: g('--force') };
+  }
+  function seg(ctx, a, b) { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+  function arrow(ctx, x0, y0, x1, y1, col, lw, label) {
+    var dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+    if (len < 5) return;
+    var ux = dx / len, uy = dy / len, hs = Math.min(9, len * 0.45);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - ux * hs * 0.6, y1 - uy * hs * 0.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - ux * hs - uy * hs * 0.45, y1 - uy * hs + ux * hs * 0.45);
+    ctx.lineTo(x1 - ux * hs + uy * hs * 0.45, y1 - uy * hs - ux * hs * 0.45);
+    ctx.closePath(); ctx.fill();
+    if (label) { ctx.font = LABEL; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, x1 + ux * 12, y1 + uy * 12); }
+  }
+  function drawTrail(ctx, arr, col, lw, amax) {
+    var n = arr.length; if (n < 2) return;
+    var G = 8;
+    ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col;
+    for (var g = 0; g < G; g++) {
+      var a = Math.floor((n - 1) * g / G), b = Math.floor((n - 1) * (g + 1) / G);
+      if (b <= a) continue;
+      ctx.globalAlpha = amax * (0.28 + 0.72 * (g + 1) / G);
+      ctx.beginPath(); ctx.moveTo(arr[a][0], arr[a][1]);
+      for (var i = a + 1; i <= b; i++) ctx.lineTo(arr[i][0], arr[i][1]);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function particle(ctx, x, y, r, C) {
+    var col = P.q > 0 ? C.pos : C.neg;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    if (P.m > 0) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.canvas; ctx.stroke(); }
+    else { ctx.fillStyle = C.canvas; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = col; ctx.stroke(); }
+  }
+
+  /* ---------- scene data ---------- */
+  function trailPoints() {
+    var rate = Math.max(50, T.w * 10);
+    var n = Math.min(6000, Math.max(2, Math.ceil(S.t * rate)));
+    var pts = new Array(n + 1);
+    for (var i = 0; i <= n; i++) pts[i] = T.pos(S.t * i / n);
+    return pts;
+  }
+  function autoL() {
+    var span = isFinite(T.period) ? T.period : 10;
+    var tEnd = Math.max(S.t, span), m = 0, N = 240;
+    for (var i = 0; i <= N; i++) {
+      var p = T.pos(tEnd * i / N);
+      m = Math.max(m, Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2]));
+    }
+    return Math.max(1, m * 1.18);
+  }
+  function currentL() {
+    if (S.auto) return autoL();
+    var v = parseFloat($('range').value);
+    return isFinite(v) && v > 0.05 ? v : 5;
+  }
+
+  /* ---------- 3D view ---------- */
+  function proj(p, L, cx, cy, sc) {
+    var u0 = p[0] / L, u1 = p[1] / L, u2 = p[2] / L;
+    var ca = Math.cos(S.az), sa = Math.sin(S.az), ce = Math.cos(S.el), se = Math.sin(S.el);
+    var x1 = u0 * ca - u1 * sa, y1 = u0 * sa + u1 * ca;
+    var zs = u2 * ce + y1 * se, dep = y1 * ce - u2 * se;
+    var f = 1 / Math.max(0.25, 1 + dep / 5);
+    return [cx + sc * x1 * f, cy - sc * zs * f, f];
+  }
+  function draw3D(C, L, pts, cur) {
+    var s = setup($('c3d')), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = C.canvas; ctx.fillRect(0, 0, w, h);
+    /* fit the projected bounding cube (+-L) to the canvas */
+    var bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+    for (var ci = 0; ci < 8; ci++) {
+      var cp = proj([(ci & 1 ? L : -L), (ci & 2 ? L : -L), (ci & 4 ? L : -L)], L, 0, 0, 1);
+      if (cp[0] < bx0) bx0 = cp[0]; if (cp[0] > bx1) bx1 = cp[0];
+      if (cp[1] < by0) by0 = cp[1]; if (cp[1] > by1) by1 = cp[1];
+    }
+    var padX = 30, padTop = 26, padBot = 38;
+    var sc = Math.max(10, Math.min((w - 2 * padX) / (bx1 - bx0), (h - padTop - padBot) / (by1 - by0)));
+    var cx = w / 2 - (bx0 + bx1) / 2 * sc;
+    var cy = padTop + (h - padTop - padBot) / 2 - (by0 + by1) / 2 * sc;
+    function pr(p) { return proj(p, L, cx, cy, sc); }
+    var step = niceStep(L, 4), nn = Math.floor(L / step + 1e-9), k, v;
+
+    ctx.lineWidth = 1; ctx.strokeStyle = C.grid;
+    for (k = -nn; k <= nn; k++) { v = k * step; seg(ctx, pr([-L, v, 0]), pr([L, v, 0])); seg(ctx, pr([v, -L, 0]), pr([v, L, 0])); }
+    ctx.strokeStyle = C.line;
+    ctx.beginPath();
+    var c1 = pr([-L, -L, 0]), c2 = pr([L, -L, 0]), c3 = pr([L, L, 0]), c4 = pr([-L, L, 0]);
+    ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c2[0], c2[1]); ctx.lineTo(c3[0], c3[1]); ctx.lineTo(c4[0], c4[1]); ctx.closePath(); ctx.stroke();
+
+    var names = ['x', 'y', 'z'], i;
+    for (i = 0; i < 3; i++) {
+      var e = [0, 0, 0]; e[i] = L;
+      var ne = [0, 0, 0]; ne[i] = -L;
+      ctx.globalAlpha = 0.35; ctx.strokeStyle = C.ax[i]; ctx.lineWidth = 1.2;
+      seg(ctx, pr(ne), pr([0, 0, 0]));
+      ctx.globalAlpha = 1;
+      var o = pr([0, 0, 0]), q = pr(e);
+      ctx.fillStyle = C.ax[i];
+      arrow(ctx, o[0], o[1], q[0], q[1], C.ax[i], 1.6, names[i]);
+    }
+
+    var col = P.q > 0 ? C.pos : C.neg;
+    if (S.showTrail && pts.length > 1) {
+      drawTrail(ctx, pts.map(function (p) { var a = pr([p[0], p[1], 0]); return [a[0], a[1]]; }), col, 1.2, 0.28);
+      drawTrail(ctx, pts.map(function (p) { var a = pr(p); return [a[0], a[1]]; }), col, 2.2, 1);
+    }
+    var pp = pr(cur.p), pf = pr([cur.p[0], cur.p[1], 0]);
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.globalAlpha = 0.7;
+    seg(ctx, pp, pf); ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    if (S.showVec) {
+      var bh = unit(P.B), vh = unit(cur.v);
+      if (bh) { var be = pr(vsc(bh, 0.5 * L)), bo = pr([0, 0, 0]); ctx.fillStyle = C.b; arrow(ctx, bo[0], bo[1], be[0], be[1], C.b, 2.4, 'B'); }
+      if (vh) { var ve = pr(vadd(cur.p, vsc(vh, 0.3 * L))); ctx.fillStyle = C.ink; arrow(ctx, pp[0], pp[1], ve[0], ve[1], C.ink, 2, 'v'); }
+      if (cur.fh) { var fe = pr(vadd(cur.p, vsc(cur.fh, 0.3 * L))); ctx.fillStyle = C.f; arrow(ctx, pp[0], pp[1], fe[0], fe[1], C.f, 2, 'F'); }
+    }
+    particle(ctx, pp[0], pp[1], Math.max(3.5, 6.5 * pp[2]), C);
+
+    ctx.font = MONO; ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('格子 ' + fmt(step, step < 1 ? 2 : 0) + ' m / 範囲 ±' + fmt(L, 1) + ' m', 10, h - 10);
+  }
+
+  /* ---------- 2D views ---------- */
+  function draw2D(cv, ia, ib, nameA, nameB, outVal, C, L, pts, cur) {
+    var s = setup(cv), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = C.canvas; ctx.fillRect(0, 0, w, h);
+    var small = w < 300;
+    var mg = small ? 24 : 32, R = Math.min(w, h) / 2 - mg, cx = w / 2, cy = h / 2;
+    var FM = small ? '10px "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace' : MONO;
+    if (R < 20) return;
+    function X(a) { return cx + a / L * R; }
+    function Y(b) { return cy - b / L * R; }
+    var step = niceStep(L, small ? 3 : 4), nn = Math.floor(L / step + 1e-9), k, v;
+    var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+
+    ctx.lineWidth = 1; ctx.strokeStyle = C.grid;
+    for (k = -nn; k <= nn; k++) {
+      v = k * step;
+      ctx.beginPath(); ctx.moveTo(X(v), Y(-L)); ctx.lineTo(X(v), Y(L)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(X(-L), Y(v)); ctx.lineTo(X(L), Y(v)); ctx.stroke();
+    }
+    ctx.strokeStyle = C.line; ctx.strokeRect(X(-L), Y(L), 2 * R, 2 * R);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = C.ax[ia]; ctx.beginPath(); ctx.moveTo(X(-L), cy); ctx.lineTo(X(L), cy); ctx.stroke();
+    ctx.strokeStyle = C.ax[ib]; ctx.beginPath(); ctx.moveTo(cx, Y(-L)); ctx.lineTo(cx, Y(L)); ctx.stroke();
+
+    ctx.font = FM; ctx.fillStyle = C.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (k = -nn; k <= nn; k++) { if (k === 0) continue; ctx.fillText(fmt(k * step, dec), X(k * step), cy + R + 6); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (k = -nn; k <= nn; k++) { if (k === 0) continue; ctx.fillText(fmt(k * step, dec), cx - R - 6, Y(k * step)); }
+    ctx.font = LABEL; ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.ax[ia]; ctx.textAlign = 'right'; ctx.fillText(nameA, X(L) - 6, cy - 12);
+    ctx.fillStyle = C.ax[ib]; ctx.textAlign = 'left'; ctx.fillText(nameB, cx + 8, Y(L) + 12);
+
+    var col = P.q > 0 ? C.pos : C.neg;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X(-L), Y(L), 2 * R, 2 * R); ctx.clip();
+    if (S.showTrail) drawTrail(ctx, pts.map(function (p) { return [X(p[ia]), Y(p[ib])]; }), col, 2.2, 1);
+    var px = X(cur.p[ia]), py = Y(cur.p[ib]);
+    if (S.showVec) {
+      var bh = unit(P.B), vh = unit(cur.v);
+      if (bh) { ctx.fillStyle = C.b; arrow(ctx, cx, cy, X(bh[ia] * 0.42 * L), Y(bh[ib] * 0.42 * L), C.b, 2.4, 'B'); }
+      if (vh) { ctx.fillStyle = C.ink; arrow(ctx, px, py, X(cur.p[ia] + vh[ia] * 0.25 * L), Y(cur.p[ib] + vh[ib] * 0.25 * L), C.ink, 2, 'v'); }
+      if (cur.fh) { ctx.fillStyle = C.f; arrow(ctx, px, py, X(cur.p[ia] + cur.fh[ia] * 0.25 * L), Y(cur.p[ib] + cur.fh[ib] * 0.25 * L), C.f, 2, 'F'); }
+    }
+    particle(ctx, px, py, small ? 4.5 : 6, C);
+    ctx.restore();
+
+    /* out-of-plane component of B */
+    var ox = 12, oy = small ? 12 : 16;
+    ctx.strokeStyle = C.b; ctx.fillStyle = C.b; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(ox, oy, 6, 0, Math.PI * 2); ctx.stroke();
+    if (outVal > 5e-4) { ctx.beginPath(); ctx.arc(ox, oy, 1.8, 0, Math.PI * 2); ctx.fill(); }
+    else if (outVal < -5e-4) {
+      ctx.beginPath(); ctx.moveTo(ox - 3.2, oy - 3.2); ctx.lineTo(ox + 3.2, oy + 3.2); ctx.moveTo(ox + 3.2, oy - 3.2); ctx.lineTo(ox - 3.2, oy + 3.2); ctx.stroke();
+    }
+    ctx.font = FM; ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    var outTxt = small ? 'B面外 ' + fmt(outVal, 2) + ' T' : 'B面外成分 ' + fmt(outVal, 2) + ' T' + (outVal > 5e-4 ? '(手前向き)' : outVal < -5e-4 ? '(奥向き)' : '');
+    ctx.fillText(outTxt, ox + 12, oy);
+  }
+
+  /* ---------- graph window ---------- */
+  var GR = [{ id: 'gx', i: 0, name: 'x' }, { id: 'gy', i: 1, name: 'y' }, { id: 'gz', i: 2, name: 'z' }];
+  function yRange(idx, t0, t1) {
+    var lo = 0, hi = 0, N = 300;
+    for (var i = 0; i <= N; i++) { var v = T.pos(t0 + (t1 - t0) * i / N)[idx]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    var pad = Math.max((hi - lo) * 0.08, 0.5);
+    return [lo - pad, hi + pad];
+  }
+  function drawGraph(g, C, t0, t1, showT) {
+    var s = setup($(g.id)), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = C.canvas; ctx.fillRect(0, 0, w, h);
+    var ml = 56, mr = 16, mt = 14, mb = showT ? 26 : 10;
+    var pw = w - ml - mr, ph = h - mt - mb;
+    if (pw < 20 || ph < 20) return;
+    var yr = yRange(g.i, t0, t1);
+    function X(t) { return ml + (t - t0) / (t1 - t0) * pw; }
+    function Y(v) { return mt + (yr[1] - v) / (yr[1] - yr[0]) * ph; }
+    var ys = niceStep(yr[1] - yr[0], 3), k;
+    ctx.lineWidth = 1; ctx.font = MONO; ctx.fillStyle = C.muted;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    var ydec = ys < 1 ? (ys < 0.1 ? 2 : 1) : 0;
+    for (k = Math.ceil(yr[0] / ys - 1e-9); k <= Math.floor(yr[1] / ys + 1e-9); k++) {
+      var yv = k * ys;
+      ctx.strokeStyle = yv === 0 ? C.line : C.grid;
+      ctx.beginPath(); ctx.moveTo(ml, Y(yv)); ctx.lineTo(ml + pw, Y(yv)); ctx.stroke();
+      ctx.fillText(fmt(yv, ydec), ml - 8, Y(yv));
+    }
+    var xs = niceStep(t1 - t0, 6);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (k = Math.ceil(t0 / xs - 1e-9); k <= Math.floor(t1 / xs + 1e-9); k++) {
+      var xv = k * xs;
+      ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(X(xv), mt); ctx.lineTo(X(xv), mt + ph); ctx.stroke();
+      if (showT) ctx.fillText(fmt(xv, xs < 1 ? 1 : 0), X(xv), mt + ph + 7);
+    }
+    ctx.strokeStyle = C.line; ctx.strokeRect(ml, mt, pw, ph);
+    if (showT) { ctx.fillStyle = C.muted; ctx.textAlign = 'right'; ctx.fillText('t [s]', w - 4, h - 14); }
+
+    var tEnd = Math.min(S.t, t1), n = Math.max(2, Math.min(2400, Math.ceil(pw * 2)));
+    ctx.save(); ctx.beginPath(); ctx.rect(ml, mt, pw, ph); ctx.clip();
+    ctx.strokeStyle = C.ax[g.i]; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (var i = 0; i <= n; i++) {
+      var t = t0 + (tEnd - t0) * i / n;
+      var px = X(t), py = Y(T.pos(t)[g.i]);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke(); ctx.restore();
+    var cv = T.pos(tEnd)[g.i];
+    ctx.fillStyle = C.ax[g.i]; ctx.beginPath(); ctx.arc(X(tEnd), Y(cv), 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = C.canvas; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = LABEL; ctx.fillStyle = C.ax[g.i]; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(g.name + '(t) [m]', ml + 8, mt + 6);
+  }
+  function drawGraphs(C) {
+    var W = parseFloat($('win').value); if (!isFinite(W) || W < 1) W = 20;
+    var t0, t1;
+    if (S.t > W) { t0 = S.t - W; t1 = S.t; } else { t0 = 0; t1 = W; }
+    for (var i = 0; i < 3; i++) drawGraph(GR[i], C, t0, t1, i === 2);
+  }
+
+  /* ---------- readout and render ---------- */
+  function updateReadout(cur) {
+    $('roT').textContent = fmt(S.t, 2) + ' s';
+    $('roPos').textContent = fmt(cur.p[0], 2) + ', ' + fmt(cur.p[1], 2) + ', ' + fmt(cur.p[2], 2);
+    $('roVel').textContent = fmt(cur.v[0], 2) + ', ' + fmt(cur.v[1], 2) + ', ' + fmt(cur.v[2], 2);
+    $('roSpeed').textContent = fmt(vlen(P.v), 3);
+    $('roW').textContent = T.w > 0 ? fmt(T.w, 3) + ' rad/s' : '0';
+    $('roPeriod').textContent = T.w > 0 ? fmt(T.period, 3) + ' s' : '∞';
+    $('roR').textContent = T.w > 0 ? fmt(T.vperp / T.w, 3) + ' m' : '∞';
+    $('roPitch').textContent = T.w > 0 ? fmt(T.vpar * T.period, 3) + ' m' : '-';
+  }
+  function render() {
+    var C = colors();
+    var L = currentL();
+    var pts = trailPoints();
+    var p = T.pos(S.t), v = T.vel(S.t);
+    var cr = vcross(v, P.B);
+    var fh = vlen(cr) < 1e-9 * Math.max(1, vlen(v) * vlen(P.B)) ? null : unit(vsc(cr, P.q));
+    var cur = { p: p, v: v, fh: fh };
+    draw3D(C, L, pts, cur);
+    draw2D($('cxy'), 0, 1, 'x', 'y', P.B[2], C, L, pts, cur);
+    draw2D($('cxz'), 0, 2, 'x', 'z', -P.B[1], C, L, pts, cur);
+    drawGraphs(C);
+    updateReadout(cur);
+  }
+
+  /* ---------- UI ---------- */
+  function syncUI() {
+    var B = vlen(P.B);
+    if (B < 1e-9) $('bInfo').textContent = 'B = 0。磁場がないので粒子は等速直線運動をします。';
+    else {
+      var th = Math.acos(Math.max(-1, Math.min(1, P.B[2] / B))) * 180 / Math.PI;
+      var ph = Math.atan2(P.B[1], P.B[0]) * 180 / Math.PI;
+      var onAxis = Math.hypot(P.B[0], P.B[1]) < 1e-9;
+      $('bInfo').textContent = '|B| = ' + fmt(B, 3) + ' T、z軸からの角 θ = ' + fmt(th, 1) + '°' + (onAxis ? '' : '、x軸からの方位角 φ = ' + fmt(ph, 1) + '°');
+    }
+    $('massNote').hidden = S.ms > 0;
+    $('range').disabled = S.auto;
+  }
+  function restart() { readParams(); S.t = 0; syncUI(); }
+  function setSigns() {
+    var btns = document.querySelectorAll('[data-sign]');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i], cur = b.getAttribute('data-target') === 'q' ? S.qs : S.ms;
+      b.setAttribute('aria-pressed', String(parseInt(b.getAttribute('data-sign'), 10) === cur));
+    }
+  }
+
+  var PRESETS = {
+    helix:  { qs: 1,  ms: 1, q: 1, m: 1, B: [0, 0, 1], v: [2, 0, 1] },
+    circle: { qs: 1,  ms: 1, q: 1, m: 1, B: [0, 0, 1], v: [2, 0, 0] },
+    line:   { qs: 1,  ms: 1, q: 1, m: 1, B: [0, 0, 1], v: [0, 0, 2] },
+    tilt:   { qs: 1,  ms: 1, q: 1, m: 1, B: [1, 0, 1], v: [2, 0, 1] },
+    neg:    { qs: -1, ms: 1, q: 1, m: 1, B: [0, 0, 1], v: [2, 0, 1] }
+  };
+  function applyPreset(k) {
+    var p = PRESETS[k]; if (!p) return;
+    S.qs = p.qs; S.ms = p.ms; setSigns();
+    $('qmag').value = p.q; $('mmag').value = p.m;
+    $('bx').value = p.B[0]; $('by').value = p.B[1]; $('bz').value = p.B[2];
+    $('vx').value = p.v[0]; $('vy').value = p.v[1]; $('vz').value = p.v[2];
+    restart();
+  }
+
+  ['qmag', 'mmag', 'bx', 'by', 'bz', 'vx', 'vy', 'vz'].forEach(function (id) { $(id).addEventListener('input', restart); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sign]'), function (b) {
+    b.addEventListener('click', function () {
+      var s = parseInt(b.getAttribute('data-sign'), 10);
+      if (b.getAttribute('data-target') === 'q') S.qs = s; else S.ms = s;
+      setSigns(); restart();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (b) {
+    b.addEventListener('click', function () { applyPreset(b.getAttribute('data-preset')); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-bdir]'), function (b) {
+    b.addEventListener('click', function () {
+      var d = b.getAttribute('data-bdir').split(',');
+      $('bx').value = d[0]; $('by').value = d[1]; $('bz').value = d[2];
+      restart();
+    });
+  });
+  $('play').addEventListener('click', function () {
+    S.playing = !S.playing;
+    $('play').textContent = S.playing ? '一時停止' : '再生';
+  });
+  $('reset').addEventListener('click', function () { S.t = 0; });
+  $('speed').addEventListener('input', function () {
+    S.speed = parseFloat($('speed').value) || 1;
+    $('speedOut').textContent = fmt(S.speed, 1) + '×';
+  });
+  $('optTrail').addEventListener('change', function () { S.showTrail = $('optTrail').checked; });
+  $('optVec').addEventListener('change', function () { S.showVec = $('optVec').checked; });
+  $('optAuto').addEventListener('change', function () { S.auto = $('optAuto').checked; syncUI(); });
+
+  var drag = null, c3 = $('c3d');
+  c3.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY }; try { c3.setPointerCapture(e.pointerId); } catch (err) {} });
+  c3.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    S.az += (e.clientX - drag.x) * 0.008;
+    S.el = Math.max(-1.45, Math.min(1.45, S.el + (e.clientY - drag.y) * 0.008));
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  function endDrag() { drag = null; }
+  c3.addEventListener('pointerup', endDrag);
+  c3.addEventListener('pointercancel', endDrag);
+  c3.addEventListener('dblclick', function () { S.az = -0.62; S.el = 0.42; });
+
+  /* ---------- start ---------- */
+  readParams();
+  syncUI();
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var span = isFinite(T.period) ? T.period : 6;
+  if (reduced) { S.playing = false; $('play').textContent = '再生'; S.t = span * 1.25; }
+  else S.t = span * 0.9;
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (S.playing) S.t += dt * S.speed;
+    try { render(); } catch (err) { if (window.console) console.error(err); }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
