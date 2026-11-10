@@ -458,12 +458,14 @@ canvas.sq { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; ma
     ctx.fillStyle = C.canvas; ctx.fillRect(0, 0, w, h);
     /* fit the projected bounding cube (+-L) to the canvas */
     var bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
-    for (var ci = 0; ci < 8; ci++) {
-      var cp = proj([(ci & 1 ? L : -L), (ci & 2 ? L : -L), (ci & 4 ? L : -L)], L, 0, 0, 1);
+    /* only what is drawn: floor square corners (z = 0) and the axis tips */
+    var fitPts = [[-L, -L, 0], [L, -L, 0], [L, L, 0], [-L, L, 0], [L, 0, 0], [-L, 0, 0], [0, L, 0], [0, -L, 0], [0, 0, L], [0, 0, -L]];
+    for (var ci = 0; ci < fitPts.length; ci++) {
+      var cp = proj(fitPts[ci], L, 0, 0, 1);
       if (cp[0] < bx0) bx0 = cp[0]; if (cp[0] > bx1) bx1 = cp[0];
       if (cp[1] < by0) by0 = cp[1]; if (cp[1] > by1) by1 = cp[1];
     }
-    var padX = 30, padTop = 26, padBot = 38;
+    var padX = 22, padTop = 22, padBot = 32;
     var sc = Math.max(10, Math.min((w - 2 * padX) / (bx1 - bx0), (h - padTop - padBot) / (by1 - by0)));
     var cx = w / 2 - (bx0 + bx1) / 2 * sc;
     var cy = padTop + (h - padTop - padBot) / 2 - (by0 + by1) / 2 * sc;
